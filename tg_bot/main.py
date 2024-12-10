@@ -1,14 +1,16 @@
+from io import BytesIO
+
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.types import Message, ContentType
+from aiogram.types import Message, ContentType, BufferedInputFile
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram import Router
 
 import asyncio
-
+from tg_bot.server_interface import call_upload_image, call_upload_text
 import aiohttp
 from certifi import contents
 
-API_TOKEN = "8111695240:AAFbInzzi4LFmta81S-RF-0BtldTDay82hY"
+API_TOKEN = "7511149812:AAE9GpapFWdOraNc42OVeHjcbsClohCkJlU"
 
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()  # используется для хранения данных FSM
@@ -19,21 +21,23 @@ dp.include_router(router)
 
 # принимает file_id и возвращает байты изображения
 async def get_image_bytes(file_id: str) -> bytes:
-    # Получаем объект файла
-    file = await bot.get_file(file_id)
-    file_path = file.file_path
+    try:
+        # Получаем объект файла
+        file = await bot.get_file(file_id)
+        file_path = file.file_path
 
-    # contents  = await bot.download_file(file_path)
+        # Формируем URL для скачивания файла
+        download_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
 
-    download_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
-
-    # Скачиваем файл и получаем его байты
-    async with aiohttp.ClientSession() as session:
-        async with session.get(download_url) as response:
-            if response.status == 200:
-                return await response.content()  # Возвращаем байты изображения
-            else:
-                raise ValueError(f"Не удалось загрузить файл, статус: {response.status}")
+        # Скачиваем файл и получаем его байты
+        async with aiohttp.ClientSession() as session:
+            async with session.get(download_url) as response:
+                if response.status == 200:
+                    return await response.read()  # Читаем и возвращаем байты файла
+                else:
+                    raise ValueError(f"Не удалось загрузить файл, статус: {response.status}")
+    except Exception as e:
+        raise RuntimeError(f"Ошибка при загрузке файла: {e}")
 
 
 # /start
@@ -44,28 +48,33 @@ async def start_handler(message: Message):
     )
 
 
-# функция (пока пустая)
-async def f(data: dict):
-    print(data)
-
-
-# обработка текстовых сообщений
 @router.message(F.content_type == ContentType.TEXT)
 async def handle_text(message: Message):
-    user_data = {"text": message.text}  # сохранение текста в словарь
-    await f(user_data)  # передача текста в функцию f
-    await message.answer("Ваш текст отправлен.")
+    text = message.text
+    username = str(message.from_user.id)
+
+    image_bytes = await call_upload_text(username, text)
+    if not image_bytes:
+        await message.answer("Вы еще не отправили картинку")
+        return
+    image_stream = BytesIO(image_bytes)
+    image_stream.seek(0)  # Перемещаем указатель в начало
+    photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+
+    # Отправляем изображение пользователю
+    await message.answer_photo(photo=photo, caption="Вот ваше изображение!")
+
 
 
 # обработка изображений
 @router.message(F.content_type == ContentType.PHOTO)
 async def handle_photo(message: Message):
-    # файл изображения
-    photo = message.photo[-1]  # последнее изображение
+    photo = message.photo[-1]
     file_id = photo.file_id
+    username = str(message.from_user.id)
 
-    user_data = {"bytes": get_image_bytes(file_id)}  # сохранение bytes изображения в словарь
-    await f(user_data)  # передача картинки в функцию f
+    image = await get_image_bytes(file_id)
+    await call_upload_image(username, image)
 
     await message.answer("Ваше изображение отправлено.")
 
