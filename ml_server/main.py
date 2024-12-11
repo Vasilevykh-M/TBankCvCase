@@ -7,9 +7,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import os
 import httpx
-from ml_server import config
+from ml_server.config import cfg as config
 
-os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(config.UPLOAD_FOLDER(), exist_ok=True)
 
 app = FastAPI()
 
