@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from io import BytesIO
 
@@ -9,7 +10,7 @@ import os
 import httpx
 from ml_server.config import cfg as config
 
-os.makedirs(config.UPLOAD_FOLDER(), exist_ok=True)
+os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
 
 app = FastAPI()
 
@@ -50,9 +51,54 @@ async def change_image(image, text):
     #         response.raise_for_status()
     #         return response.json()["img"]
 
-def get_needed_image(username, text):
-    model_prompt = config.prompt_for_choosing_image.format(text)
-    image_path = user_data[username][-1]
+
+async def get_index_from_text(request):
+    prompt = f"""You are a model designed to assist an image generator in determining which image the user wants to modify.
+There are three images in the following order: 
+- image1: the oldest (two steps ago).
+- image2: the previous (one step ago).
+- image3: the most recent (latest).
+
+The user's request is: {request}
+
+Respond with the image number the user wants to modify. 
+Only output one of these options exactly as written: image1, image2, image3."""
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "model": 'Qwen/Qwen2.5-3B-Instruct',
+        "prompt": prompt,
+    }
+    d = {"image1": 1, "image2": 2, "image3": 3}
+    text = ""
+    trys_count = 0
+    while text not in ["image1", "image2", "image3"]:
+        if trys_count > 5:
+            break
+        async with httpx.AsyncClient() as client:
+            response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
+                                         data=json.dumps(data))
+        if response.status_code == 200:
+            try:
+                text = " ".join(response.json()["choices"][0]["text"].strip().split())
+            except KeyError:
+                print("Unexpected response format:", response.json())
+        else:
+            print(f"Error: {response.status_code}, {response.text}")
+        trys_count += 1
+    if text not in d:
+        return 3
+    return d[text]
+
+
+async def get_needed_image(username, text):
+    index = await get_index_from_text(text)
+    try:
+        image_path = user_data[username][index - 1]
+    except IndexError:
+        image_path = user_data[username][-1]
     with open(image_path, "rb") as f:
         img_bytes = f.read()
     return img_bytes
@@ -81,6 +127,7 @@ async def upload_image(username: str = Form(...), image: UploadFile = File(...))
 
 @app.post("/upload_text/")
 async def upload_text(data: TextInput):
+    print("upload_text", flush=True)
     username = data.username
     text = data.text
 
@@ -91,7 +138,7 @@ async def upload_text(data: TextInput):
 
 
     preprocessed_text = await get_preprocessed_question(text)
-    needed_img = get_needed_image(username, text)
+    needed_img = await get_needed_image(username, text)
     changed_image = await change_image(needed_img, preprocessed_text)
     save_image(changed_image, username)
 
