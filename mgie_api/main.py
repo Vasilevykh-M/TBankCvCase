@@ -14,11 +14,6 @@ import uvicorn
 from generate_image import MGIE_Model
 
 
-class ImageTextPayload(BaseModel):
-    image_bytes: str
-    text: str
-
-
 model = None
 app = FastAPI()
 
