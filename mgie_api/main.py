@@ -18,20 +18,6 @@ model = None
 app = FastAPI()
 
 
-# origins = [
-#     "http://127.0.0.1",
-#     "http://127.0.0.1:8000"
-# ]
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-
 @app.post("/generate/")
 async def generate(img_file: UploadFile = File(...), promt: str = ""):
     if all(ext not in img_file.filename for ext in ['.jpg', '.jpeg', '.png']):
