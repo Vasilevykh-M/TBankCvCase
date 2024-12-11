@@ -20,11 +20,12 @@ class TextInput(BaseModel):
     text: str
 
 async def get_preprocessed_question(message):
+    prompt_for_model = config.prompt_for_question_preprocess_model.format(message)
     await asyncio.sleep(0.1)
     return "pupupu..."
     # data = {
     #     "model": "unsloth/Llama-3.2-3B-Instruct",
-    #     "messages": [{"role": "user", "content": message}]
+    #     "messages": [{"role": "user", "content": prompt_for_model}]
     # }
     # headers = {"Content-Type": "application/json"}
     #
@@ -50,6 +51,7 @@ async def change_image(image, text):
     #         return response.json()["img"]
 
 def get_needed_image(username, text):
+    model_prompt = config.prompt_for_choosing_image.format(text)
     image_path = user_data[username][-1]
     with open(image_path, "rb") as f:
         img_bytes = f.read()
