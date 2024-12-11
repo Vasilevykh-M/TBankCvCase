@@ -19,7 +19,7 @@ app = FastAPI()
 
 
 @app.post("/generate/")
-async def generate(img_file: UploadFile = File(...), promt: str = ""):
+async def generate(img_file: UploadFile = File(...), prompt: str = ""):
     if all(ext not in img_file.filename for ext in ['.jpg', '.jpeg', '.png']):
         return HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -30,15 +30,13 @@ async def generate(img_file: UploadFile = File(...), promt: str = ""):
     pil_image = PIL.Image.open(BytesIO(request_object_content))
 
     try:
-
-        pil_image.save("ex.jpg")
-
-        generated_result = await model.generate_image(pil_image, promt)
+        generated_result = model.generate_image(pil_image, prompt)
 
         byte_array = io.BytesIO()
-        generated_result.save(byte_array, format='JPG')
+        generated_result.save(byte_array, format='png')
+        encoded_byte_array = base64.b64encode(byte_array.getvalue())
 
-        return {"generated_image_bytes": byte_array.getvalue()}
+        return {"generated_image_bytes": encoded_byte_array}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
