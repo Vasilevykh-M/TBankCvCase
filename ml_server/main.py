@@ -10,6 +10,8 @@ from pydantic import BaseModel
 import os
 import httpx
 from ml_server.config import cfg as config
+from fusion_brain_api import Text2ImageAPI
+from time import time
 
 os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
 
@@ -17,6 +19,9 @@ app = FastAPI()
 
 user_image_data = {}
 user_text_data = {}
+
+image_generation_api = Text2ImageAPI('https://api-key.fusionbrain.ai/', '5BB29EBC2AF2B879CEFBEB84184519E2',
+                        '15EEC189294AB3F6224EEE5591ADACED')
 
 class TextInput(BaseModel):
     username: str
@@ -104,6 +109,14 @@ async def get_needed_image(username, text):
     print(index)
     return open(image_path, "rb")
 
+def generate_image(text):
+    model_id = image_generation_api.get_model()
+    uuid = image_generation_api.generate(text, model_id)
+    images = image_generation_api.check_generation(uuid)
+    image_base64 = images[0]
+    image_data = base64.b64decode(image_base64)
+    return image_data
+
 def save_image(image: bytes, username: str):
     filename = f"{username}_{uuid.uuid4().hex}.jpg"
     file_path = os.path.join(config.UPLOAD_FOLDER, filename)
@@ -116,6 +129,53 @@ def save_image(image: bytes, username: str):
         os.remove(user_image_data[username][0])
         user_image_data[username] = user_image_data[username][1:]
     return file_path
+
+async def detect_generation(request):
+    prompt = (
+        "You are a text classification model. Your task is to categorize user instructions about images into one of two categories: "
+        '"generation" if the user requests creating a new image, or "redaction" if the user asks to modify an existing image. '
+        "Only return the category name without any explanations or additional text.\n\n"
+        "Examples:\n"
+        "1. \"Create a picture of a flying dragon.\" → generation\n"
+        "2. \"Change the background to blue.\" → redaction\n"
+        "3. \"Now generate a new image of a superhero cat.\" → generation\n"
+        "4. \"Make the sky in the image brighter.\" → redaction\n\n"
+        "Now categorize this input: \"{user_input}\""
+    ).format(user_input=request)
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "model": 'Qwen/Qwen2.5-3B-Instruct',
+        "prompt": prompt,
+    }
+    text = ""
+    trys_count = 0
+    while text not in ["generation", "redaction"]:
+        if trys_count > 5:
+            break
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
+                                         data=json.dumps(data))
+        if response.status_code == 200:
+            try:
+                text = " ".join(response.json()["choices"][0]["text"].strip().split())
+            except KeyError:
+                print("Unexpected response format:", response.json())
+        else:
+            print(f"Error: {response.status_code}, {response.text}")
+        g = "generation" in text
+        r = "redaction" in text
+        if g and not r:
+            text = "generation"
+        elif not g and r:
+            text = "redaction"
+        trys_count += 1
+    return text == "generation"
+
+
 
 @app.post("/upload_image/")
 async def upload_image(username: str = Form(...), image: UploadFile = File(...)):
@@ -134,16 +194,27 @@ async def upload_text(data: TextInput):
 
     if not username or not text:
         raise HTTPException(status_code=400, detail="Имя пользователя и текст обязательны")
+    if await detect_generation(text):
+        generated_image = generate_image(text)
+        save_image(generated_image, username)
+        image_stream = BytesIO(generated_image)
+        return StreamingResponse(image_stream, media_type="image/jpeg")
     if len(user_image_data.get(username, [])) == 0:
         raise HTTPException(status_code=404, detail="Вы еще не отправили картинку")
 
+    t = time()
     preprocessed_text = await get_preprocessed_question(text)
-    print(preprocessed_text)
+    print("preprocess time: ", time() - t)
+    t = time()
+    print("preprocess text: ", preprocessed_text)
     user_text_data[username] = user_text_data.get(username, []) + [text]
-    if len(user_text_data[username]) > config.text_content_length:
-        user_text_data[username] = user_text_data[1:]
+    if len(user_text_data[username]) > config.text_context_length:
+        user_text_data[username] = user_text_data[username][1:]
     needed_img = await get_needed_image(username, text)
+    print("get needed image time : ", time() - t)
+    t = time()
     changed_image = change_image(needed_img, preprocessed_text)
+    print("change image time : ", time() - t)
     save_image(changed_image, username)
 
     image_stream = BytesIO(changed_image)
@@ -155,7 +226,7 @@ async def clear_history(username: str):
     return JSONResponse(content={"message": "История очищена"})
 
 def clear_history_(username: str):
-    for img_path in user_image_data[username]:
+    for img_path in user_image_data.get(username, []):
         os.remove(img_path)
     user_image_data[username] = []
     user_text_data[username] = []

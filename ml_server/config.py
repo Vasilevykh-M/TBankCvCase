@@ -47,7 +47,7 @@ class Config:
         return self.context_length_
 
     @property
-    def ml_server_url(self):
+    def ml_llm_worker_url(self):
         return self.ml_llm_worker_url_
 
     @property
