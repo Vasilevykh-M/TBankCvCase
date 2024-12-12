@@ -2,6 +2,9 @@ import PIL
 
 import torch
 
+import cv2
+import numpy as np
+
 import diffusers
 
 from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel
@@ -13,18 +16,27 @@ from mgie_llava import LlavaLlamaForCausalLM
 
 from config import *
 
+from PIL import Image, ImageOps
+import numpy as np
 
-def crop_resize(f, sz=512):
-    w, h = f.size
-    if w > h:
-        p = (w - h) // 2
-        f = f.crop([p, 0, p + h, h])
-    elif h > w:
-        p = (h - w) // 2
-        f = f.crop([0, p, w, p + w])
-    f = f.resize([sz, sz])
-    return f
+def mean_color(img):
+      im2arr = np.array(img)
+      color_top = im2arr[0]
+      color_down = im2arr[-1]
+      color_right = im2arr[:][0]
+      color_left = im2arr[:][-1]
+      return tuple((color_top + color_down + color_right + color_left).mean(axis=0).astype(int))
 
+def resize_with_padding(img, expected_size=512):
+    color = mean_color(img)
+    img.thumbnail((expected_size[0], expected_size[1]))
+    # print(img.size)
+    delta_width = expected_size[0] - img.size[0]
+    delta_height = expected_size[1] - img.size[1]
+    pad_width = delta_width // 2
+    pad_height = delta_height // 2
+    padding = (pad_width, pad_height, delta_width - pad_width, delta_height - pad_height)
+    return ImageOps.expand(img, padding, color)
 
 def remove_alter(s):
     if 'ASSISTANT:' in s: 
@@ -109,7 +121,7 @@ class MGIE_Model():
 
 
     def generate_image(self, image: PIL.Image, prompt: str, device="cuda", seed=42):
-        image = crop_resize(image)
+        image = resize_with_padding(image)
         image_pixel_values = self.image_processor(image, return_tensors="pt")["pixel_values"]
         image_pixel_values = image_pixel_values.half()
 
@@ -150,9 +162,9 @@ class MGIE_Model():
             emb = self.model.edit_head(hid.unsqueeze(dim=0), self.embedding)
             result_image = self.pipeline(
                 image=image,
-                prompt_embeds=emb, 
-                negative_prompt_embeds=self.null_embedding, 
-                generator=torch.Generator(device=device).manual_seed(seed)
+                prompt_embeds=emb,
+                negative_prompt_embeds=self.null_embedding,
+                guidance_scale=7.5, image_guidance_scale=1.5
             ).images[0]
 
         return result_image

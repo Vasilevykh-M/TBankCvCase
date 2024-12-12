@@ -2,3 +2,15 @@ fastapi[standard]
 uvicorn
 pydantic
 pillow
+sentencepiece
+transformers
+diffusers==0.29.0
+tokenizers
+datasets
+accelerate
+evaluate
+gradio
+git+https://github.com/haotian-liu/LLaVA@7ace501
+torch
+torchvision
+torchaudio
