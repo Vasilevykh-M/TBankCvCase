@@ -20,7 +20,7 @@ class Config:
 
         self.UPLOAD_FOLDER_  = os.getenv('UPLOAD_FOLDER')
         self.context_length_ = int(os.getenv('CONTEXT_LENGHT'))
-        self.text_content_length_ = int(os.getenv('CONTEXT_LENGHT'))
+        self.text_context_length_ = int(os.getenv('CONTEXT_LENGHT'))
         self.max_trys_ = int(os.getenv("MAX_TRYS"))
 
         self.ml_llm_worker_url_ = os.getenv('ML_WORKER_LLM_URL')
@@ -60,7 +60,7 @@ class Config:
 
     @property
     def text_context_length(self):
-        return self.text_content_length_
+        return self.text_context_length_
 
 
 cfg = Config()

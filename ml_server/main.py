@@ -47,8 +47,7 @@ async def get_preprocessed_question(message):
 
 
 def change_image(image, prompt): # image is file(image = open("img", "rb"))
-    URL = config.ml_image_worker_url_.format(prompt)
-
+    URL = config.ml_image_worker_url.format(prompt)
     files = {
         "img_file": image
     }
@@ -81,7 +80,7 @@ async def get_index_from_text(request):
         if trys_count > 5:
             break
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(config.ml_llm_worker_url_, headers=headers,
+            response = await client.post(config.ml_llm_worker_url, headers=headers,
                                          data=json.dumps(data))
         if response.status_code == 200:
             try:
@@ -141,6 +140,8 @@ async def upload_text(data: TextInput):
     preprocessed_text = await get_preprocessed_question(text)
     print(preprocessed_text)
     user_text_data[username] = user_text_data.get(username, []) + [text]
+    if len(user_text_data[username]) > config.text_content_length:
+        user_text_data[username] = user_text_data[1:]
     needed_img = await get_needed_image(username, text)
     changed_image = change_image(needed_img, preprocessed_text)
     save_image(changed_image, username)
@@ -157,6 +158,7 @@ def clear_history_(username: str):
     for img_path in user_image_data[username]:
         os.remove(img_path)
     user_image_data[username] = []
+    user_text_data[username] = []
 
 if __name__ == "__main__":
     import uvicorn
