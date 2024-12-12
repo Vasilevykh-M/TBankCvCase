@@ -8,7 +8,6 @@ from aiogram import Router
 import asyncio
 from tg_bot.server_interface import call_upload_image, call_upload_text
 import aiohttp
-from certifi import contents
 
 API_TOKEN = "7511149812:AAE9GpapFWdOraNc42OVeHjcbsClohCkJlU"
 

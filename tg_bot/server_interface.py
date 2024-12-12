@@ -4,9 +4,9 @@ api_url = "http://localhost:8000"
 
 
 async def call_upload_text(username, text):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=200.0) as client:
         payload = {"username": username, "text": text}
-        response = await client.post(f"{api_url}/upload_text/", json=payload)
+        response = await client.post(f"{api_url}/upload_text/", json=payload, )
         if response.status_code == 404:
             return None
         if response.status_code != 200:
