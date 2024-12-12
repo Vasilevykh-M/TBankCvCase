@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import uuid
@@ -6,7 +5,7 @@ from io import BytesIO
 
 import requests
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import os
 import httpx
@@ -33,8 +32,8 @@ async def get_preprocessed_question(message):
         "model": 'Qwen/Qwen2.5-3B-Instruct',
         "prompt": prompt_for_model,
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(config.ml_llm_worker_url_, headers=headers,
                                      data=json.dumps(data))
     text = message
     if response.status_code == 200:
@@ -47,8 +46,8 @@ async def get_preprocessed_question(message):
     return text
 
 
-def change_image(image, prompt):
-    URL = f"http://172.18.0.241:8825/generate/?prompt={prompt}"
+def change_image(image, prompt): # image is file(image = open("img", "rb"))
+    URL = config.ml_image_worker_url_.format(prompt)
 
     files = {
         "img_file": image
@@ -56,7 +55,6 @@ def change_image(image, prompt):
     response = requests.post(URL, files=files)
     content = response.content
     content_dict = json.loads(content)
-
 
     image.close()
 
@@ -67,16 +65,7 @@ def change_image(image, prompt):
 
 
 async def get_index_from_text(request):
-    prompt = f"""You are a model designed to assist an image generator in determining which image the user wants to modify.
-There are three images in the following order: 
-- image1: the oldest (two steps ago).
-- image2: the previous (one step ago).
-- image3: the most recent (latest).
-
-The user's request is: {request}
-
-Respond with the image number the user wants to modify. 
-Only output one of these options exactly as written: image1, image2, image3."""
+    prompt = config.index_model_prompt.format(request)
     headers = {
         "Content-Type": "application/json",
     }
@@ -91,8 +80,8 @@ Only output one of these options exactly as written: image1, image2, image3."""
     while text not in ["image1", "image2", "image3"]:
         if trys_count > 5:
             break
-        async with httpx.AsyncClient() as client:
-            response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(config.ml_llm_worker_url_, headers=headers,
                                          data=json.dumps(data))
         if response.status_code == 200:
             try:
