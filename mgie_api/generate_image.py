@@ -2,9 +2,6 @@ import PIL
 
 import torch
 
-import cv2
-import numpy as np
-
 import diffusers
 
 from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel
@@ -27,7 +24,7 @@ def mean_color(img):
       color_left = im2arr[:][-1]
       return tuple((color_top + color_down + color_right + color_left).mean(axis=0).astype(int))
 
-def resize_with_padding(img, expected_size=512):
+def resize_with_padding(img, expected_size=(512, 512)):
     color = mean_color(img)
     img.thumbnail((expected_size[0], expected_size[1]))
     # print(img.size)
