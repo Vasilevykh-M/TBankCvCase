@@ -40,11 +40,11 @@ async def get_image_bytes(file_id: str) -> bytes:
 
 
 # /start
-@router.message(F.text == "/start")
-async def start_handler(message: Message):
-    await message.answer(
-        "Привет! Пожалуйста, отправьте изображение и (или) текст."
-    )
+# @router.message(F.text == "/start")
+# async def start_handler(message: Message):
+#     await message.answer(
+#         "Привет! Пожалуйста, отправьте изображение и (или) текст."
+#     )
 
 
 @router.message(F.content_type == ContentType.TEXT)
@@ -52,16 +52,22 @@ async def handle_text(message: Message):
     text = message.text
     username = str(message.from_user.id)
 
-    image_bytes = await call_upload_text(username, text)
-    if not image_bytes:
-        await message.answer("Вы еще не отправили картинку")
-        return
-    image_stream = BytesIO(image_bytes)
-    image_stream.seek(0)  # Перемещаем указатель в начало
-    photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+    waiting_message = await message.answer("Обрабатываю ваш запрос, пожалуйста, подождите...")
 
-    # Отправляем изображение пользователю
-    await message.answer_photo(photo=photo, caption="Вот ваше изображение!")
+    try:
+        image_bytes = await call_upload_text(username, text)
+        if not image_bytes:
+            await waiting_message.edit_text("Вы еще не отправили картинку")
+            return
+
+        image_stream = BytesIO(image_bytes)
+        image_stream.seek(0)
+        photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+
+        await waiting_message.delete()
+        await message.answer_photo(photo=photo, caption="Вот ваше изображение!")
+    except Exception as e:
+        await waiting_message.edit_text(f"Произошла ошибка: {str(e)}")
 
 
 
