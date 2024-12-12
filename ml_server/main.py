@@ -22,32 +22,34 @@ class TextInput(BaseModel):
     username: str
     text: str
 
-async def get_preprocessed_question(message):
-    return message
-    prompt_for_model = config.prompt_for_question_preprocess_model.format(message)
-    headers = {
-        "Content-Type": "application/json",
-    }
-    data = {
-        "model": 'Qwen/Qwen2.5-3B-Instruct',
-        "prompt": prompt_for_model,
-    }
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(config.ml_llm_worker_url_, headers=headers,
-                                     data=json.dumps(data))
-    text = message
-    if response.status_code == 200:
-        try:
-            text = " ".join(response.json()["choices"][0]["text"].strip().split())
-        except KeyError:
-            print("Unexpected response format:", response.json())
-    else:
-        print(f"Error: {response.status_code}, {response.text}")
-    return text
+# async def get_preprocessed_question(message):
+#     return message
+#     prompt_for_model = config.prompt_for_question_preprocess_model.format(message)
+
+#     headers = {
+#         "Content-Type": "application/json",
+#     }
+#     data = {
+#         "model": 'Qwen/Qwen2.5-3B-Instruct',
+#         "prompt": prompt_for_model,
+#     }
+#     async with httpx.AsyncClient(timeout=30) as client:
+#         response = await client.post(config.ml_llm_worker_url_, headers=headers,
+#                                      data=json.dumps(data))
+#     text = message
+#     if response.status_code == 200:
+#         try:
+#             text = " ".join(response.json()["choices"][0]["text"].strip().split())
+#         except KeyError:
+#             print("Unexpected response format:", response.json())
+#     else:
+#         print(f"Error: {response.status_code}, {response.text}")
+#     return text
 
 
-def change_image(image, prompt): # image is file(image = open("img", "rb"))
-    URL = config.ml_image_worker_url.format(prompt)
+def change_image(username, image): # image is file(image = open("img", "rb"))
+    edited_prompt = get_summarized_prompt(user_text_data[username])
+    URL = config.ml_image_worker_url.format(edited_prompt)
     files = {
         "img_file": image
     }
@@ -95,6 +97,30 @@ async def get_index_from_text(request):
     return d[text]
 
 
+async def get_summarized_prompt(request):
+    prompt = config.summarized_model_prompt.format(request)
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "model": 'Qwen/Qwen2.5-3B-Instruct',
+        "prompt": prompt,
+    }
+    text = ""
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(config.ml_llm_worker_url, headers=headers,
+                                         data=json.dumps(data))
+    if response.status_code == 200:
+        try:
+            text = " ".join(response.json()["choices"][0]["text"].strip().split())
+        except KeyError:
+            print("Unexpected response format:", response.json())
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+    return text 
+
+
 async def get_needed_image(username, text):
     index = await get_index_from_text(text)
     try:
@@ -137,13 +163,13 @@ async def upload_text(data: TextInput):
     if len(user_image_data.get(username, [])) == 0:
         raise HTTPException(status_code=404, detail="Вы еще не отправили картинку")
 
-    preprocessed_text = await get_preprocessed_question(text)
-    print(preprocessed_text)
+    # preprocessed_text = await get_preprocessed_question(text)
+    # print(preprocessed_text)
     user_text_data[username] = user_text_data.get(username, []) + [text]
     if len(user_text_data[username]) > config.text_content_length:
         user_text_data[username] = user_text_data[1:]
     needed_img = await get_needed_image(username, text)
-    changed_image = change_image(needed_img, preprocessed_text)
+    changed_image = change_image(data.username, needed_img)
     save_image(changed_image, username)
 
     image_stream = BytesIO(changed_image)
