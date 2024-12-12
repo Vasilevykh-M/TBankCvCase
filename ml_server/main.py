@@ -1,8 +1,10 @@
 import asyncio
+import base64
 import json
 import uuid
 from io import BytesIO
 
+import requests
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -14,42 +16,54 @@ os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
 
 app = FastAPI()
 
-user_data = {}
+user_image_data = {}
+user_text_data = {}
 
 class TextInput(BaseModel):
     username: str
     text: str
 
 async def get_preprocessed_question(message):
+    return message
     prompt_for_model = config.prompt_for_question_preprocess_model.format(message)
-    await asyncio.sleep(0.1)
-    return "pupupu..."
-    # data = {
-    #     "model": "unsloth/Llama-3.2-3B-Instruct",
-    #     "messages": [{"role": "user", "content": prompt_for_model}]
-    # }
-    # headers = {"Content-Type": "application/json"}
-    #
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.post(config.ml_server_url, json=data, headers=headers)
-    #     if response.status_code == 200:
-    #         return response.json().get("answer", message)
-    #     else:
-    #         return message
+    headers = {
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": 'Qwen/Qwen2.5-3B-Instruct',
+        "prompt": prompt_for_model,
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
+                                     data=json.dumps(data))
+    text = message
+    if response.status_code == 200:
+        try:
+            text = " ".join(response.json()["choices"][0]["text"].strip().split())
+        except KeyError:
+            print("Unexpected response format:", response.json())
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+    return text
 
-async def change_image(image, text):
-    await asyncio.sleep(0.1)
-    return image
-    # async with httpx.AsyncClient() as client:
-    #     with open(image_path, "rb") as image:
-    #         files = {'image': ("image.jpg", image, "image/jpeg")}
-    #         data = {
-    #             "model": "MGIE",
-    #             "messages": [{"role": "user", "content": text}]
-    #         }
-    #         response = await client.post(config.ml_server_url, files=files, data=data)
-    #         response.raise_for_status()
-    #         return response.json()["img"]
+
+def change_image(image, prompt):
+    URL = f"http://172.18.0.241:8825/generate/?prompt={prompt}"
+
+    files = {
+        "img_file": image
+    }
+    response = requests.post(URL, files=files)
+    content = response.content
+    content_dict = json.loads(content)
+
+
+    image.close()
+
+    result_image_bytes = bytes(content_dict["generated_image_bytes"], encoding="utf-8")
+    decoded_image_bytes = base64.b64decode(result_image_bytes)
+
+    return decoded_image_bytes
 
 
 async def get_index_from_text(request):
@@ -96,12 +110,11 @@ Only output one of these options exactly as written: image1, image2, image3."""
 async def get_needed_image(username, text):
     index = await get_index_from_text(text)
     try:
-        image_path = user_data[username][index - 1]
+        image_path = user_image_data[username][index - 1]
     except IndexError:
-        image_path = user_data[username][-1]
-    with open(image_path, "rb") as f:
-        img_bytes = f.read()
-    return img_bytes
+        image_path = user_image_data[username][-1]
+    print(index)
+    return open(image_path, "rb")
 
 def save_image(image: bytes, username: str):
     filename = f"{username}_{uuid.uuid4().hex}.jpg"
@@ -109,17 +122,18 @@ def save_image(image: bytes, username: str):
     with open(file_path, "wb") as buffer:
         buffer.write(image)
 
-    user_data[username] = user_data.get(username, [])
-    user_data[username].append(file_path)
-    if len(user_data[username]) > config.context_length:
-        os.remove(user_data[username][0])
-        user_data[username] = user_data[username][1:]
+    user_image_data[username] = user_image_data.get(username, [])
+    user_image_data[username].append(file_path)
+    if len(user_image_data[username]) > config.context_length:
+        os.remove(user_image_data[username][0])
+        user_image_data[username] = user_image_data[username][1:]
     return file_path
 
 @app.post("/upload_image/")
 async def upload_image(username: str = Form(...), image: UploadFile = File(...)):
     if not username or not image:
         raise HTTPException(status_code=400, detail="Имя пользователя и файл обязательны")
+    clear_history_(username)
     bytes_image = await image.read()
     file_path = save_image(bytes_image, username)
 
@@ -127,19 +141,19 @@ async def upload_image(username: str = Form(...), image: UploadFile = File(...))
 
 @app.post("/upload_text/")
 async def upload_text(data: TextInput):
-    print("upload_text", flush=True)
     username = data.username
     text = data.text
 
     if not username or not text:
         raise HTTPException(status_code=400, detail="Имя пользователя и текст обязательны")
-    if len(user_data.get(username, [])) == 0:
+    if len(user_image_data.get(username, [])) == 0:
         raise HTTPException(status_code=404, detail="Вы еще не отправили картинку")
 
-
     preprocessed_text = await get_preprocessed_question(text)
+    print(preprocessed_text)
+    user_text_data[username] = user_text_data.get(username, []) + [text]
     needed_img = await get_needed_image(username, text)
-    changed_image = await change_image(needed_img, preprocessed_text)
+    changed_image = change_image(needed_img, preprocessed_text)
     save_image(changed_image, username)
 
     image_stream = BytesIO(changed_image)
@@ -147,10 +161,13 @@ async def upload_text(data: TextInput):
 
 @app.post("/clear_history/")
 async def clear_history(username: str):
-    for img_path in user_data[username]:
-        os.remove(img_path)
-    user_data[username] = []
+    clear_history_(username)
     return JSONResponse(content={"message": "История очищена"})
+
+def clear_history_(username: str):
+    for img_path in user_image_data[username]:
+        os.remove(img_path)
+    user_image_data[username] = []
 
 if __name__ == "__main__":
     import uvicorn

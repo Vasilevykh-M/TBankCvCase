@@ -8,6 +8,7 @@ class Config:
 
         self.UPLOAD_FOLDER_  = os.getenv('UPLOAD_FOLDER')
         self.context_length_ = int(os.getenv('CONTEXT_LENGHT'))
+        self.text_content_length_ = int(os.getenv('CONTEXT_LENGHT'))
         self.max_trys_ = int(os.getenv("MAX_TRYS"))
 
         self.ml_server_url_ = os.getenv('ML_WORKER_PROMT')
@@ -33,6 +34,10 @@ class Config:
     @property
     def prompt_for_question_preprocess_model(self):
         return self.prompt_for_question_preprocess_model_
+
+    @property
+    def text_context_length(self):
+        return self.text_content_length_
 
 
 cfg = Config()
