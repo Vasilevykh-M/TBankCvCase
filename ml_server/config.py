@@ -13,6 +13,15 @@ The user's request is: {}
 Respond with the image number the user wants to modify. 
 Only output one of these options exactly as written: image1, image2, image3."""
 
+summarized_model_prompt = """
+You are an assistant of a chat-bot that gets the user's image and a prompt to edit the image. 
+Your task is to summarize the text context. You should answer with only one sentence.
+
+Given three prompts: {}
+
+Summarize them and write new prompt in one sentence. 
+"""
+
 class Config:
     def __init__(self):
         load_dotenv()
@@ -29,6 +38,7 @@ class Config:
         self.prompt_for_question_preprocess_model_ = os.getenv('PROMT_FOR_QUESTION_MODEL')
 
         self.index_model_prompt_ = index_model_prompt
+        self.summarized_model_prompt_ = summarized_model_prompt
 
     @property
     def index_model_prompt(self):
