@@ -17,7 +17,7 @@ async def call_upload_text(username, text):
 
 
 async def call_upload_image(username, image_file: bytes):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         files = {"image": image_file}
         data = {"username": username}
         response = await client.post(f"{api_url}/upload_image/", data=data, files=files)
