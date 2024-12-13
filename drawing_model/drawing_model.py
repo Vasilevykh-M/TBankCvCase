@@ -14,7 +14,7 @@ class DrawingModel:
                                          batch_size=1, guidance_scale=4,
                                          h=1024, w=1024
                                          , sampler='p_sampler', prior_cf_scale=4,
-                                         prior_steps="5", )
+                                         prior_steps="5")
         return images[0]
 
 class DarwingApi:
