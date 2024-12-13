@@ -1,17 +1,25 @@
-import base64
+import os
 import json
 import uuid
+import httpx
+import base64
+import logging
+import requests
+from time import time
 from io import BytesIO
 
-import requests
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
+
 from pydantic import BaseModel
-import os
-import httpx
-from ml_server.config import cfg as config
+
 from fusion_brain_api import Text2ImageAPI
-from time import time
+
+from config import cfg as config
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="API.log", encoding="utf-8", level=logging.INFO)
 
 os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
 
@@ -20,23 +28,26 @@ app = FastAPI()
 user_image_data = {}
 user_text_data = {}
 
-image_generation_api = Text2ImageAPI('https://api-key.fusionbrain.ai/', '5BB29EBC2AF2B879CEFBEB84184519E2',
-                        '15EEC189294AB3F6224EEE5591ADACED')
+image_generation_api = Text2ImageAPI(
+    'https://api-key.fusionbrain.ai/', 
+    '5BB29EBC2AF2B879CEFBEB84184519E2',
+    '15EEC189294AB3F6224EEE5591ADACED'
+)
 
 class TextInput(BaseModel):
     username: str
     text: str
 
-def change_image(image, prompt): # image is file(image = open("img", "rb"))
+def change_image(image_bytes, prompt):
     URL = config.ml_image_worker_url.format(prompt)
     files = {
-        "img_file": image
+        "img_file": image_bytes
     }
     response = requests.post(URL, files=files)
     content = response.content
     content_dict = json.loads(content)
 
-    image.close()
+    image_bytes.close()
 
     result_image_bytes = bytes(content_dict["generated_image_bytes"], encoding="utf-8")
     decoded_image_bytes = base64.b64decode(result_image_bytes)
@@ -54,6 +65,8 @@ async def get_index_from_text(request):
         "model": 'Qwen/Qwen2.5-3B-Instruct',
         "prompt": prompt,
     }
+    json_data = json.dumps(data)
+
     d = {"image1": 1, "image2": 2, "image3": 3}
     text = ""
     trys_count = 0
@@ -61,15 +74,18 @@ async def get_index_from_text(request):
         if trys_count > 5:
             break
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(config.ml_llm_worker_url, headers=headers,
-                                         data=json.dumps(data))
+            response = await client.post(
+                config.ml_llm_worker_url, 
+                headers=headers,
+                data=json_data
+            )
         if response.status_code == 200:
             try:
                 text = " ".join(response.json()["choices"][0]["text"].strip().split())
             except KeyError:
-                print("Unexpected response format:", response.json())
+                logger.error("Unexpected response format: " + str(response.json()))
         else:
-            print(f"Error: {response.status_code}, {response.text}")
+            logger.error(f"Error: {response.status_code}, {response.text}")
         trys_count += 1
     if text not in d:
         return 3
@@ -85,14 +101,19 @@ async def get_summarized_prompt(request):
     data = {
         "model": 'Qwen/Qwen2.5-3B-Instruct',
         "prompt": prompt,
+        "max_tokens": 20
     }
+    json_data = json.dumps(data)
     text = ""
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(config.ml_llm_worker_url, headers=headers,
-                                         data=json.dumps(data))
+        response = await client.post(
+            config.ml_llm_worker_url, 
+            headers=headers,
+            data=json_data
+        )
     if response.status_code == 200:
         try:
-            text = " ".join(response.json()["choices"][0]["text"].strip().split())
+            text = response.json()["choices"][0]["text"]
         except KeyError:
             print("Unexpected response format:", response.json())
     else:
@@ -102,12 +123,15 @@ async def get_summarized_prompt(request):
 
 async def get_needed_image(username, text):
     index = await get_index_from_text(text)
+
     try:
         image_path = user_image_data[username][index - 1]
     except IndexError:
         image_path = user_image_data[username][-1]
-    print(index)
+
+    logger.debug(f"Image index: {index}")
     return open(image_path, "rb")
+
 
 def generate_image(text):
     model_id = image_generation_api.get_model()
@@ -116,6 +140,7 @@ def generate_image(text):
     image_base64 = images[0]
     image_data = base64.b64decode(image_base64)
     return image_data
+
 
 def save_image(image: bytes, username: str):
     filename = f"{username}_{uuid.uuid4().hex}.jpg"
@@ -163,9 +188,10 @@ async def detect_generation(request):
             try:
                 text = " ".join(response.json()["choices"][0]["text"].strip().split())
             except KeyError:
-                print("Unexpected response format:", response.json())
+                logger.error(f"Unexpected response format: {response.json()}")
         else:
-            print(f"Error: {response.status_code}, {response.text}")
+            logger.error(f"Error: {response.status_code}, {response.text}")
+
         g = "generation" in text
         r = "redaction" in text
         if g and not r:
@@ -194,27 +220,34 @@ async def upload_text(data: TextInput):
 
     if not username or not text:
         raise HTTPException(status_code=400, detail="Имя пользователя и текст обязательны")
-    if await detect_generation(text):
-        generated_image = generate_image(text)
-        save_image(generated_image, username)
-        image_stream = BytesIO(generated_image)
-        return StreamingResponse(image_stream, media_type="image/jpeg")
+    # if await detect_generation(text):
+    #     generated_image = generate_image(text)
+    #     save_image(generated_image, username)
+    #     image_stream = BytesIO(generated_image)
+    #     return StreamingResponse(image_stream, media_type="image/jpeg")
     if len(user_image_data.get(username, [])) == 0:
         raise HTTPException(status_code=404, detail="Вы еще не отправили картинку")
+    
+    if username not in user_text_data:
+        user_text_data[username] = []
+    user_text_data[username].append(text)
 
-    t = time()
-    edited_prompt = get_summarized_prompt(user_text_data[username])
-    print("preprocess time: ", time() - t)
-    t = time()
-    print("edited_prompt : ", edited_prompt)
-    user_text_data[username] = user_text_data.get(username, []) + [text]
     if len(user_text_data[username]) > config.text_context_length:
         user_text_data[username] = user_text_data[username][1:]
-    needed_img = await get_needed_image(username, text)
-    print("get needed image time : ", time() - t)
+
+    # t = time()
+    # edited_prompt = await get_summarized_prompt(user_text_data[username])
+    # logger.info(f"Time to preprocess prompt: {time() - t}")
+    # logger.info(f"Edited prompt: {edited_prompt}")
     t = time()
-    changed_image = change_image(needed_img, edited_prompt)
-    print("change image time : ", time() - t)
+    needed_img = await get_needed_image(username, text)
+    logger.info(f"Time to get image ID: {time() - t}")
+
+    t = time()
+    # changed_image = change_image(needed_img, edited_prompt)
+    changed_image = change_image(needed_img, text)
+    logger.info(f"Time to edit image: {time() - t}")
+
     save_image(changed_image, username)
 
     image_stream = BytesIO(changed_image)

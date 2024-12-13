@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram import Router
 
 import asyncio
-from tg_bot.server_interface import call_upload_image, call_upload_text
+from server_interface import call_upload_image, call_upload_text
 import aiohttp
 
 API_TOKEN = "7511149812:AAE9GpapFWdOraNc42OVeHjcbsClohCkJlU"
@@ -40,11 +40,11 @@ async def get_image_bytes(file_id: str) -> bytes:
 
 
 # /start
-# @router.message(F.text == "/start")
-# async def start_handler(message: Message):
-#     await message.answer(
-#         "Привет! Пожалуйста, отправьте изображение и (или) текст."
-#     )
+@router.message(F.text == "/start")
+async def start_handler(message: Message):
+    await message.answer(
+        "Привет! Пожалуйста, отправьте изображение и (или) текст."
+    )
 
 
 @router.message(F.content_type == ContentType.TEXT)
