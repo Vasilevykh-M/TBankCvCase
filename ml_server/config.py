@@ -35,12 +35,18 @@ class Config:
 
         self.prompt_for_question_preprocess_model_ = os.getenv('PROMT_FOR_QUESTION_MODEL')
 
+        self.port_ = int(os.getenv("SERVER_PORT"))
+
         self.index_model_prompt_ = index_model_prompt
         self.summarized_model_prompt_ = summarized_model_prompt
 
     @property
     def index_model_prompt(self):
         return self.index_model_prompt_
+
+    @property
+    def port(self):
+        return self.port_
     
     @property
     def summarized_model_prompt(self):

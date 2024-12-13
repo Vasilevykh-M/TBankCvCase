@@ -1,6 +1,15 @@
+import base64
+import os
+
+from dotenv import load_dotenv
+
 import httpx
 
-api_url = "http://localhost:8000"
+load_dotenv()
+
+api_port = os.getenv('API_PORT')
+api_url = f"http://localhost:{api_port}"
+debug = True
 
 
 async def call_upload_text(username, text):
@@ -11,9 +20,16 @@ async def call_upload_text(username, text):
             return None
         if response.status_code != 200:
             raise Exception(f"Ошибка: {response.status_code}, {response.text}")
-        image_bytes = response.content
+        if debug:
+            response_json = response.json()
+            edited_prompt = response_json.get("edited_prompt")
+            image_base64 = response_json.get("image_base64")
+            if not image_base64:
+                raise Exception("Ответ не содержит изображение в Base64 формате")
+            image_bytes = base64.b64decode(image_base64)
 
-        return image_bytes
+            return {"edited_prompt": edited_prompt, "image_bytes": image_bytes}
+        return response.content
 
 
 async def call_upload_image(username, image_file: bytes):

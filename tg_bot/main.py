@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram import Router
 
 import asyncio
-from server_interface import call_upload_image, call_upload_text
+from server_interface import call_upload_image, call_upload_text, debug
 import aiohttp
 
 from dotenv import load_dotenv
@@ -63,17 +63,31 @@ async def handle_text(message: Message):
     waiting_message = await message.answer("Обрабатываю ваш запрос, пожалуйста, подождите...")
 
     try:
-        image_bytes = await call_upload_text(username, text)
-        if not image_bytes:
+        result = await call_upload_text(username, text)
+        if not result:
             await waiting_message.edit_text("Вы еще не отправили картинку")
             return
 
-        image_stream = BytesIO(image_bytes)
-        image_stream.seek(0)
-        photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+        if debug:
+            edited_prompt = result["edited_prompt"]
+            image_bytes = result["image_bytes"]
 
-        await waiting_message.delete()
-        await message.answer_photo(photo=photo, caption="Вот ваше изображение!")
+            image_stream = BytesIO(image_bytes)
+            image_stream.seek(0)
+            photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+
+            await waiting_message.delete()
+            await message.answer_photo(photo=photo,
+                                       caption=f"Вот ваше изображение!\n\n**Generation prompt:** {edited_prompt}")
+        else:
+            image_bytes = result
+
+            image_stream = BytesIO(image_bytes)
+            image_stream.seek(0)
+            photo = BufferedInputFile(image_stream.read(), filename="image.jpg")
+
+            await waiting_message.delete()
+            await message.answer_photo(photo=photo, caption="Вот ваше изображение!")
     except Exception as e:
         await waiting_message.edit_text(f"Произошла ошибка: {str(e)}")
 
