@@ -13,13 +13,11 @@ The user's request is: {}
 Respond with the image number the user wants to modify. 
 Only output one of these options exactly as written: image1, image2, image3."""
 
-summarized_model_prompt = """
-You are an assistant of a chat-bot that gets the user's image and a prompt to edit the image. 
-Your task is to summarize the text context. You should answer with only one sentence.
+summarized_model_prompt = """You are a model designed to assist an image generator in writing new prompt from old prompts.
+There are three sentences in the following order: {}. 
 
-Given three prompts: {}
-
-Summarize them and write new prompt in one sentence. 
+Respond with the new prompt. Don't add any information that is out of context.
+Only output one sentence without any other words.
 """
 
 class Config:
@@ -43,6 +41,11 @@ class Config:
     @property
     def index_model_prompt(self):
         return self.index_model_prompt_
+    
+    @property
+    def summarized_model_prompt(self):
+        return self.summarized_model_prompt_
+
 
     @property
     def max_trys(self):
