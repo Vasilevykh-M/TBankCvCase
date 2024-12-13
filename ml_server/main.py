@@ -106,9 +106,9 @@ class Worker_api:
             '15EEC189294AB3F6224EEE5591ADACED'
         )
 
-    # генерация нового изображения
     def change_image(self, image, prompt):
         URL = config.ml_image_worker_url
+        print(type(image))
 
         data = {
             "img_file": image.decode("utf-8"),
@@ -166,35 +166,6 @@ class Worker_api:
             return 3
         return d[text]
 
-    # преобразование промта
-    async def get_summarized_prompt(self, request):
-        prompt = config.summarized_model_prompt.format(request)
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        data = {
-            "model": 'Qwen/Qwen2.5-3B-Instruct',
-            "prompt": prompt,
-            "max_tokens": 20
-        }
-        json_data = json.dumps(data)
-        text = ""
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                config.ml_llm_worker_url,
-                headers=headers,
-                data=json_data
-            )
-        if response.status_code == 200:
-            try:
-                text = response.json()["choices"][0]["text"]
-            except KeyError:
-                print("Unexpected response format:", response.json())
-        else:
-            print(f"Error: {response.status_code}, {response.text}")
-        return text
-
     async def get_needed_image(self, username, text):
         index = await self.get_index_from_text(text)
 
@@ -217,51 +188,6 @@ class Worker_api:
 
         return image
 
-    async def detect_generation(self, request):
-        prompt = (
-            "You are a text classification model. Your task is to categorize user instructions about images into one of two categories: "
-            '"generation" if the user requests creating a new image, or "redaction" if the user asks to modify an existing image. '
-            "Only return the category name without any explanations or additional text.\n\n"
-            "Examples:\n"
-            "1. \"Create a picture of a flying dragon.\" → generation\n"
-            "2. \"Change the background to blue.\" → redaction\n"
-            "3. \"Now generate a new image of a superhero cat.\" → generation\n"
-            "4. \"Make the sky in the image brighter.\" → redaction\n\n"
-            "Now categorize this input: \"{user_input}\""
-        ).format(user_input=request)
-
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        data = {
-            "model": 'Qwen/Qwen2.5-3B-Instruct',
-            "prompt": prompt,
-        }
-        text = ""
-        trys_count = 0
-        while text not in ["generation", "redaction"]:
-            if trys_count > 5:
-                break
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post("http://172.18.0.241:8826/v1/completions", headers=headers,
-                                             data=json.dumps(data))
-            if response.status_code == 200:
-                try:
-                    text = " ".join(response.json()["choices"][0]["text"].strip().split())
-                except KeyError:
-                    logger.error(f"Unexpected response format: {response.json()}")
-            else:
-                logger.error(f"Error: {response.status_code}, {response.text}")
-
-            g = "generation" in text
-            r = "redaction" in text
-            if g and not r:
-                text = "generation"
-            elif not g and r:
-                text = "redaction"
-            trys_count += 1
-        return text == "generation"
 
     async def validate_one_request(self, request, prompt):
         p = prompt.format(user_input=request)
@@ -333,7 +259,7 @@ class Worker_FastApi:
         bytes_image = await image.read()
 
         base64image = base64.b64encode(bytes_image)
-        self.worker.ctx.save_image(base64image, username)
+        self.worker.save_image(base64image, username)
 
         return JSONResponse(content={"message": "Изображение загружено успешно"})
 
