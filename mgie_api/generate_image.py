@@ -17,16 +17,20 @@ from PIL import Image, ImageOps
 import numpy as np
 
 
-def crop_resize(f, size=512):
-    w, h = f.size
-    if w > h:
-        p = (w - h) // 2
-        f = f.crop([p, 0, p + h, h])
-    elif h > w:
-        p = (h - w) // 2
-        f = f.crop([0, p, w, p + w])
-    f = f.resize([size, size])
-    return f
+def crop_resize(image, size=512):
+    width, height = image.size
+    new_width, new_height = 0, 0
+
+    if (width > height):
+        aspect_ratio = size / float(width)
+        new_width = 512
+        new_height = int(height * aspect_ratio)
+    else:
+        aspect_ratio = size / float(height)
+        new_height = 512
+        new_width = int(width * aspect_ratio)
+    resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    return resized_image
 
 
 def remove_alter(s):
