@@ -18,19 +18,25 @@ model = None
 app = FastAPI()
 
 
+class Body(BaseModel):
+    img_file: str=""
+    prompt: str = ""
+
+
+
 @app.post("/generate/")
-async def generate(img_file: UploadFile = File(...), prompt: str = ""):
-    if all(ext not in img_file.filename for ext in ['.jpg', '.jpeg', '.png']):
+async def generate(item: Body):
+    if item.img_file == "":
         return HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f'File {img_file.filename} has unsupported extension type',
+            detail=f'File has unsupported extension type',
         )
 
-    request_object_content = await img_file.read()
+    request_object_content = base64.b64decode(bytes(item.img_file, encoding="utf-8"))
     pil_image = PIL.Image.open(BytesIO(request_object_content))
 
     try:
-        generated_result = model.generate_image(pil_image, prompt)
+        generated_result = model.generate_image(pil_image, item.prompt)
 
         byte_array = io.BytesIO()
         generated_result.save(byte_array, format='png')
@@ -44,3 +50,4 @@ async def generate(img_file: UploadFile = File(...), prompt: str = ""):
 if __name__ == "__main__":
     model = MGIE_Model()
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    
