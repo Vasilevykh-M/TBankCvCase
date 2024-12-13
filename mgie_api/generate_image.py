@@ -16,24 +16,6 @@ from config import *
 from PIL import Image, ImageOps
 import numpy as np
 
-def mean_color(img):
-      im2arr = np.array(img)
-      color_top = im2arr[0]
-      color_down = im2arr[-1]
-      color_right = im2arr[:][0]
-      color_left = im2arr[:][-1]
-      return tuple((color_top + color_down + color_right + color_left).mean(axis=0).astype(int))
-
-def resize_with_padding(img, expected_size=(512, 512)):
-    color = mean_color(img)
-    img.thumbnail((expected_size[0], expected_size[1]))
-    # print(img.size)
-    delta_width = expected_size[0] - img.size[0]
-    delta_height = expected_size[1] - img.size[1]
-    pad_width = delta_width // 2
-    pad_height = delta_height // 2
-    padding = (pad_width, pad_height, delta_width - pad_width, delta_height - pad_height)
-    return ImageOps.expand(img, padding, color)
 
 def remove_alter(s):
     if 'ASSISTANT:' in s: 
@@ -118,7 +100,6 @@ class MGIE_Model():
 
 
     def generate_image(self, image: PIL.Image, prompt: str, device="cuda", seed=42):
-        image = resize_with_padding(image)
         image_pixel_values = self.image_processor(image, return_tensors="pt")["pixel_values"]
         image_pixel_values = image_pixel_values.half()
 
