@@ -23,8 +23,6 @@ from config import cfg as config
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename="API.log", encoding="utf-8", level=logging.INFO)
 
-os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
-
 class Context:
     def __init__(self):
         self.user_text = {}
