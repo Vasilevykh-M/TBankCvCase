@@ -235,17 +235,17 @@ async def upload_text(data: TextInput):
     if len(user_text_data[username]) > config.text_context_length:
         user_text_data[username] = user_text_data[username][1:]
 
-    # t = time()
-    # edited_prompt = await get_summarized_prompt(user_text_data[username])
-    # logger.info(f"Time to preprocess prompt: {time() - t}")
-    # logger.info(f"Edited prompt: {edited_prompt}")
+    t = time()
+    edited_prompt = await get_summarized_prompt(user_text_data[username])
+    logger.info(f"Time to preprocess prompt: {time() - t}")
+    logger.info(f"Edited prompt: {edited_prompt}")
     t = time()
     needed_img = await get_needed_image(username, text)
     logger.info(f"Time to get image ID: {time() - t}")
 
     t = time()
-    # changed_image = change_image(needed_img, edited_prompt)
-    changed_image = change_image(needed_img, text)
+    changed_image = change_image(needed_img, edited_prompt)
+    # changed_image = change_image(needed_img, text)
     logger.info(f"Time to edit image: {time() - t}")
 
     save_image(changed_image, username)

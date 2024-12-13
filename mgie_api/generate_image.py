@@ -17,6 +17,22 @@ from PIL import Image, ImageOps
 import numpy as np
 
 
+def crop_resize(image, size=512):
+    width, height = image.size
+    new_width, new_height = 0, 0
+
+    if (width > height):
+        aspect_ratio = size / float(width)
+        new_width = 512
+        new_height = int(height * aspect_ratio)
+    else:
+        aspect_ratio = size / float(height)
+        new_height = 512
+        new_width = int(width * aspect_ratio)
+    resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    return resized_image
+
+
 def remove_alter(s):
     if 'ASSISTANT:' in s: 
         s = s[s.index('ASSISTANT:')+10:].strip()
@@ -100,6 +116,7 @@ class MGIE_Model():
 
 
     def generate_image(self, image: PIL.Image, prompt: str, device="cuda", seed=42):
+        image = crop_resize(image)
         image_pixel_values = self.image_processor(image, return_tensors="pt")["pixel_values"]
         image_pixel_values = image_pixel_values.half()
 
@@ -142,7 +159,8 @@ class MGIE_Model():
                 image=image,
                 prompt_embeds=emb,
                 negative_prompt_embeds=self.null_embedding,
-                guidance_scale=7.5, image_guidance_scale=1.5
+                guidance_scale=7.5, image_guidance_scale=1.5,
+                generator=torch.Generator(device='cuda').manual_seed(seed)
             ).images[0]
 
         return result_image

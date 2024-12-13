@@ -1,5 +1,7 @@
 from io import BytesIO
 
+import os
+
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.types import Message, ContentType, BufferedInputFile
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -9,10 +11,16 @@ import asyncio
 from server_interface import call_upload_image, call_upload_text
 import aiohttp
 
-API_TOKEN = "7511149812:AAE9GpapFWdOraNc42OVeHjcbsClohCkJlU"
+from dotenv import load_dotenv
 
+
+load_dotenv()
+
+
+API_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=API_TOKEN)
-storage = MemoryStorage()  # используется для хранения данных FSM
+
+storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
