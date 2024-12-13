@@ -42,8 +42,7 @@ async def generate_image_prompt(messages, system_message):
 
 
 # Пример вызова
-async def preprocess_text():
-    user_messages = ["теперь на синий", "добавь деревья на передний план", "удали облака в небе"]
+async def preprocess_text(user_messages):
     system_message = (
         "You are an assistant for an image editing model. Your task is to generate a clear and concise prompt "
         "in English for the image editing model. Use previous instructions only as context for understanding the latest one. "
@@ -51,4 +50,4 @@ async def preprocess_text():
         "generating a single sentence prompt in English. Avoid referring to previous steps explicitly."
     )
     prompt = await generate_image_prompt(user_messages, system_message)
-    print(prompt)
+    return prompt

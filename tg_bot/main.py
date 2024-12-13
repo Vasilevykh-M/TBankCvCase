@@ -78,10 +78,9 @@ async def handle_text(message: Message):
 
             await waiting_message.delete()
             await message.answer_photo(photo=photo,
-                                       caption=f"Вот ваше изображение!\n\n**Generation prompt:** {edited_prompt}")
+                                       caption=f"Вот ваше изображение!\n\nПерефразированный промпт: {edited_prompt}")
         else:
             image_bytes = result
-
             image_stream = BytesIO(image_bytes)
             image_stream.seek(0)
             photo = BufferedInputFile(image_stream.read(), filename="image.jpg")

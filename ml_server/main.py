@@ -311,6 +311,7 @@ class Worker_api:
         else:
             return 1
 
+
     def clear_history_(self, username: str):
         self.ctx.clear_history_(username)
 
@@ -345,8 +346,10 @@ class Worker_FastApi:
         if await self.worker.detect_generation(text):
             logger.info("generation detected")
             generated_image = self.worker.generate_image(text)
-            self.worker.save_image(base64.b64encode(generated_image), username)
-            changed_image = generated_image
+            bytes_image = base64.b64encode(generated_image)
+            self.worker.save_image(bytes_image, username)
+            changed_image = base64.b64decode(bytes_image)
+            edited_prompt = text
         else:
             if len(self.worker.ctx.user_image.get(username, [])) == 0:
                 raise HTTPException(status_code=400, detail="Вы еще не отправили картинку")
@@ -363,24 +366,23 @@ class Worker_FastApi:
             logger.info(f"Time to get image ID: {time() - t}")
 
             t = time()
-            #edited_prompt = await preprocess_text(self.worker.ctx.user_text[username])
-            edited_prompt = await translate(self.worker.ctx.user_text[username][-1])
+            edited_prompt = await preprocess_text(self.worker.ctx.user_text[username])
+            # edited_prompt = await translate(self.worker.ctx.user_text[username][-1])
             logger.info(f"Time to preprocess prompt: {time() - t}")
             logger.info(f"Edited prompt: {edited_prompt}")
 
             t = time()
             changed_image = self.worker.change_image(needed_img, edited_prompt)
             logger.info(f"Time to edit image: {time() - t}")
+            bytes_image = base64.b64encode(changed_image)
 
 
-            self.worker.save_image(changed_image, username)
-
-        image = base64.b64encode(changed_image)
+            self.worker.save_image(bytes_image, username)
 
         if debug:
             response_json = {
                 "edited_prompt": edited_prompt,
-                "image_base64": image.decode('utf-8')  # Преобразуем в строку
+                "image_base64": bytes_image.decode('utf-8')
             }
             return JSONResponse(content=response_json)
         else:
@@ -397,4 +399,4 @@ if __name__ == "__main__":
     api = Worker_FastApi()
     app = FastAPI()
     app.include_router(api.router)
-    uvicorn.run(app, host="0.0.0.0", port=config.port)
+    uvicorn.run(app, host="localhost", port=config.port)
