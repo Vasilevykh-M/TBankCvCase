@@ -19,8 +19,8 @@ async def generate_image_prompt(messages, system_message):
         "model": "Qwen/Qwen2.5-3B-Instruct",
         "messages": [{"role": "system", "content": system_message}] + processed_messages,
         "max_tokens": 50,
-        "temperature": 0.5,
-        "top_p": 1.0,
+        "temperature": 0.3,  # Снижаем уровень креативности
+        "top_p": 0.9,       # Ограничиваем вероятностное распределение
     }
     headers = {"Content-Type": "application/json"}
 
@@ -45,9 +45,10 @@ async def generate_image_prompt(messages, system_message):
 async def preprocess_text(user_messages):
     system_message = (
         "You are an assistant for an image editing model. Your task is to generate a clear and concise prompt "
-        "in English for the image editing model. Use previous instructions only as context for understanding the latest one. "
-        "Assume previous instructions have already been completed. Your response must focus exclusively on the latest instruction, "
-        "generating a single sentence prompt in English. Avoid referring to previous steps explicitly."
+        "in English for the image editing model. Focus on precision and simplicity. Use previous instructions only "
+        "as context for understanding the latest one. Assume previous instructions have already been completed. "
+        "Do not add unnecessary adjectives, descriptions, or embellishments. Your response must focus exclusively "
+        "on the latest instruction, generating a single straightforward sentence in English."
     )
     prompt = await generate_image_prompt(user_messages, system_message)
     return prompt
